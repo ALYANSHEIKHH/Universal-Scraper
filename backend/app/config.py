@@ -4,6 +4,9 @@
 
 import os
 
+SECRET_KEY = os.getenv("SECRET_KEY", "default-secret")
+CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", 0.7))
+
 # === System Constants ===
 MAX_TOTAL_SIZE_BYTES = 500 * 1024 * 1024   # 500MB
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024    # 10MB
