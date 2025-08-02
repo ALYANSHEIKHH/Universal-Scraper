@@ -154,13 +154,13 @@ export default function LoginForm({ onSwitchToRegister }: LoginFormProps) {
 
       <div className="relative z-10 w-full max-w-md sm:max-w-lg px-4 sm:px-6">
         {/* Header */}
-        <div className="text-center mb-10">
+        <div className="text-center  mb-10">
           <div className="flex items-center justify-center gap-4 mb-6 sm:mb-8">
-            <div className="relative">
+            <div className="relative mt-3">
               <Sparkles className="w-10 sm:w-12 h-10 sm:h-12 text-purple-400 animate-bounce" />
               <div className="absolute inset-0 w-10 sm:w-12 h-10 sm:h-12 bg-purple-400/20 rounded-full blur-xl animate-pulse" />
             </div>
-            <h1 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-purple-400 via-blue-400 to-emerald-400 bg-clip-text text-transparent drop-shadow-2xl">
+            <h1 className="text-4xl mr-11  sm:text-5xl font-black bg-gradient-to-r from-purple-400 via-blue-400 to-emerald-400 bg-clip-text text-transparent drop-shadow-2xl">
               Welcome
             </h1>
           </div>
