@@ -47,15 +47,18 @@ from app.auth import router as auth_router
 
 app = FastAPI()
 
-# CORS for frontend (Next.js)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Adjust based on your frontend URL
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "https://localhost:3000",  # Local development (https)
+        "https://your-frontend-domain.vercel.app",  # Your deployed frontend (when you deploy to Vercel)
+        "https://alyan1-my-fastapi-backend.hf.space"  # Your Hugging Face space (for API docs)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(auth_router)
 
 @app.get("/")
