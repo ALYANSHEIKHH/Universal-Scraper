@@ -1,14 +1,12 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import Image from 'next/image'
+// import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { PhotoProvider, PhotoView } from 'react-photo-view'
 import 'react-photo-view/dist/react-photo-view.css'
 import {
   ArrowLeft,
-  // Image as ImageIcon, 
-  // Loader2, 
   Sparkles,
   Eye,
   Grid3X3,
@@ -28,20 +26,142 @@ import {
   Clock,
   TrendingUp,
   BarChart3,
-  // Settings,
   RefreshCw,
   Maximize2,
-  // Info,
-  // ChevronLeft,
-  // ChevronRight
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 
-// Reusable function to download an image
-async function handleDownload(url: string, filename?: string) {
+// ✅ FIXED: TypeScript interfaces
+interface ImageData {
+  url: string;
+  filename: string;
+  category?: string;
+  analysis?: string | null;
+  size?: number;
+  created?: string;
+  modified?: string;
+}
+
+interface SafeImageProps {
+  src: string;
+  alt: string;
+  className?: string;
+  loading?: 'lazy' | 'eager';
+  onError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
+  onLoad?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
+  [key: string]: any;
+}
+
+interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface AuthContextType {
+  user: AuthUser | null;
+  logout: () => void;
+}
+
+type ViewMode = 'grid' | 'masonry' | 'carousel';
+type SortBy = 'date' | 'name' | 'size';
+
+// ✅ FIXED: Safe URL construction utility
+const constructImageUrl = (baseUrl: string, imgUrl: string): string => {
+  if (!baseUrl || !imgUrl) {
+    console.warn('Missing baseUrl or imgUrl:', { baseUrl, imgUrl });
+    return '/placeholder-image.jpg';
+  }
+  
+  // Clean base URL - remove trailing slash
+  const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+  
+  // Ensure image URL has leading slash if it doesn't start with http
+  let cleanImgUrl = imgUrl;
+  if (!imgUrl.startsWith('http')) {
+    cleanImgUrl = imgUrl.startsWith('/') ? imgUrl : `/${imgUrl}`;
+  }
+  
+  const finalUrl = imgUrl.startsWith('http') ? imgUrl : `${cleanBaseUrl}${cleanImgUrl}`;
+  
+  console.log('URL Construction:', {
+    baseUrl,
+    imgUrl,
+    cleanBaseUrl,
+    cleanImgUrl,
+    finalUrl
+  });
+  
+  return finalUrl;
+};
+
+// ✅ FIXED: Enhanced Image component with proper TypeScript
+const SafeImage: React.FC<SafeImageProps> = ({ 
+  src, 
+  alt, 
+  className = '', 
+  onError, 
+  onLoad,
+  loading = 'lazy',
+  ...props 
+}) => {
+  const [imageError, setImageError] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    console.error('Image failed to load:', src);
+    
+    // CRITICAL: Prevent infinite loop
+    const target = e.currentTarget;
+    target.onerror = null;
+    
+    // Set fallback image
+    target.src = '/placeholder-image.svg';
+
+
+    setImageError(true);
+    setIsLoading(false);
+    
+    if (onError) onError(e);
+  };
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    setIsLoading(false);
+    setImageError(false);
+    if (onLoad) onLoad(e);
+  };
+
+  return (
+    <div className="relative">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-800/50 rounded-lg z-10">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
+        </div>
+      )}
+      
+      <img
+        src={src}
+        alt={alt}
+        className={`${className} ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+        onError={handleImageError}
+        onLoad={handleImageLoad}
+        loading={loading}
+        {...props}
+      />
+      
+      {imageError && (
+        <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded z-20">
+          Failed to load
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ✅ FIXED: Download function with proper types
+async function handleDownload(url: string, filename?: string): Promise<void> {
   try {
-    // First try with fetch and proper CORS handling
     const response = await fetch(url, {
       mode: 'cors',
       headers: {
@@ -68,7 +188,6 @@ async function handleDownload(url: string, filename?: string) {
   } catch (err) {
     console.error('Primary download method failed:', err);
 
-    // Fallback: Try direct link download (may not work with CORS but worth trying)
     try {
       const link = document.createElement('a');
       link.href = url;
@@ -80,8 +199,6 @@ async function handleDownload(url: string, filename?: string) {
       link.remove();
     } catch (fallbackErr) {
       console.error('Fallback download failed:', fallbackErr);
-
-      // Final fallback: Open in new tab
       const newWindow = window.open(url, '_blank');
       if (!newWindow) {
         alert('Download failed due to CORS restrictions. Please right-click the image and select "Save image as..." to download manually.');
@@ -92,8 +209,8 @@ async function handleDownload(url: string, filename?: string) {
   }
 }
 
-// Reusable function to share an image using the Web Share API
-async function handleShare(url: string, filename?: string) {
+// ✅ FIXED: Share function with proper types
+async function handleShare(url: string, filename?: string): Promise<void> {
   if (navigator.share) {
     try {
       await navigator.share({
@@ -102,17 +219,14 @@ async function handleShare(url: string, filename?: string) {
         url,
       });
     } catch (err) {
-      // User cancelled or error - silently handle
       console.log('Share cancelled or failed:', err);
     }
   } else {
-    // fallback: copy link
     try {
       await navigator.clipboard.writeText(url);
       alert('Link copied to clipboard!');
     } catch (err) {
       console.error('Clipboard access failed:', err);
-      // Fallback for clipboard failure
       const textarea = document.createElement('textarea');
       textarea.value = url;
       document.body.appendChild(textarea);
@@ -124,16 +238,14 @@ async function handleShare(url: string, filename?: string) {
   }
 }
 
-// Function to download all images
-async function handleBulkDownload(images: Array<{ url: string; filename: string }>, type: string) {
+// ✅ FIXED: Bulk download function
+async function handleBulkDownload(images: ImageData[], type: string): Promise<void> {
   if (images.length === 0) {
     alert('No images to download.');
     return;
   }
 
-  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-  // Show progress to user
+  const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
   const totalImages = images.length;
   let downloadedCount = 0;
 
@@ -145,14 +257,12 @@ async function handleBulkDownload(images: Array<{ url: string; filename: string 
       await handleDownload(img.url, filename);
       downloadedCount++;
 
-      // Update user on progress (you could replace this with a toast notification)
       if (i === images.length - 1) {
         console.log(`Download complete: ${downloadedCount}/${totalImages} images`);
       }
 
-      // Add delay between downloads to prevent overwhelming the browser
       if (i < images.length - 1) {
-        await delay(1000); // Increased delay to prevent CORS issues
+        await delay(1000);
       }
     } catch (error) {
       console.error(`Failed to download image ${i + 1}:`, error);
@@ -162,8 +272,8 @@ async function handleBulkDownload(images: Array<{ url: string; filename: string 
   alert(`Bulk download initiated for ${totalImages} images. Check your downloads folder.`);
 }
 
-// Function to share gallery
-async function handleBulkShare(images: Array<{ url: string; filename: string }>, type: string) {
+// ✅ FIXED: Bulk share function
+async function handleBulkShare(images: ImageData[], type: string): Promise<void> {
   const galleryText = `Check out this AI-classified ${type} gallery with ${images.length} images!`;
   const firstImageUrl = images[0]?.url;
 
@@ -178,7 +288,6 @@ async function handleBulkShare(images: Array<{ url: string; filename: string }>,
       console.log('Share cancelled or failed:', err);
     }
   } else {
-    // Fallback: copy gallery info to clipboard
     const galleryInfo = `${galleryText}\n\nImages:\n${images.map((img, i) => `${i + 1}. ${img.url}`).join('\n')}`;
     try {
       await navigator.clipboard.writeText(galleryInfo);
@@ -190,83 +299,84 @@ async function handleBulkShare(images: Array<{ url: string; filename: string }>,
   }
 }
 
-export default function GalleryPage() {
+// ✅ FIXED: Main component with proper TypeScript
+export default function GalleryPage(): JSX.Element {
   const params = useParams();
   const type = typeof params?.type === 'string' ? params.type : '';
 
-  const router = useRouter()
-  const { user, logout } = useAuth()
+  const router = useRouter();
+  const { user, logout } = useAuth() as AuthContextType;
 
-  const [images, setImages] = useState<{ url: string; filename: string; analysis?: string | null }[]>([])
-  const [loading, setLoading] = useState(true)
-  // const [selectedImage, setSelectedImage] = useState<number | null>(null)
-  const [viewMode, setViewMode] = useState<'grid' | 'masonry' | 'carousel'>('grid')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState<'date' | 'name' | 'size'>('date')
-  const [showFilters, setShowFilters] = useState(false)
-  const [favorites, setFavorites] = useState<Set<number>>(new Set())
+  const [images, setImages] = useState<ImageData[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [sortBy, setSortBy] = useState<SortBy>('date');
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [favorites, setFavorites] = useState<Set<number>>(new Set());
 
-  // ✅ BEST PRACTICE: Define outside useEffect to avoid recreation
+  // ✅ FIXED: Define backend URL properly
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://alyan1-my-fastapi-backend.hf.space';
 
-  useEffect(() => {
-    if (!type || !type.trim()) return
+   useEffect(() => {
+    if (!type) return
     setLoading(true)
 
     fetch(`${backendUrl}/api/images/${type}`, {
-      credentials: 'include', // ✅ FIXED: Include session cookies for authentication
+      credentials: 'include',
     })
       .then(res => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
+        return res.json()
       })
-      .then(data => setImages(data.images || []))
+      .then((data: { images: ImageData[] }) => {
+        const fixedImages = data.images.map(img => ({
+          ...img,
+          url: constructImageUrl(backendUrl, img.url),
+        }))
+        setImages(fixedImages)
+      })
       .catch(err => {
-        console.error('Image fetch error:', err);
-        setImages([]);
+        console.error('Image fetch error:', err)
+        setImages([])
       })
       .finally(() => setLoading(false))
-  }, [type]) // Don't forget to add the dependency array!
-  const handleLogout = () => {
-    logout()
-  }
+  }, [type, backendUrl])
 
-  const toggleFavorite = (index: number) => {
-    const newFavorites = new Set(favorites)
+  const handleLogout = (): void => {
+    logout();
+  };
+
+  const toggleFavorite = (index: number): void => {
+    const newFavorites = new Set(favorites);
     if (newFavorites.has(index)) {
-      newFavorites.delete(index)
+      newFavorites.delete(index);
     } else {
-      newFavorites.add(index)
+      newFavorites.add(index);
     }
-    setFavorites(newFavorites)
-  }
+    setFavorites(newFavorites);
+  };
 
-  const filteredImages = images.filter((img, index) =>
+  const filteredImages = images.filter((img: ImageData, index: number) =>
     searchTerm === '' || `Image ${index + 1}`.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  );
 
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-black text-white relative overflow-hidden">
         {/* Enhanced Background Effects */}
         <div className="absolute inset-0 pointer-events-none z-0">
-          {/* Multiple gradient orbs with different animations */}
           <div className="absolute top-[-20%] left-[-20%] w-[800px] h-[800px] bg-gradient-to-br from-purple-600/15 via-blue-600/10 to-cyan-600/8 rounded-full blur-3xl animate-pulse-slow" />
           <div className="absolute bottom-[-20%] right-[-20%] w-[900px] h-[900px] bg-gradient-to-br from-emerald-600/12 via-teal-600/8 to-blue-600/10 rounded-full blur-3xl animate-pulse-slower" />
           <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-gradient-to-br from-indigo-600/18 via-purple-600/12 to-pink-600/10 rounded-full blur-2xl animate-pulse" style={{ transform: 'translate(-50%, -50%)' }} />
 
-          {/* Floating geometric shapes with enhanced animations */}
           <div className="absolute left-1/4 top-1/3 w-40 h-40 bg-gradient-to-br from-purple-500/25 to-blue-500/15 opacity-50 rounded-full blur-2xl animate-float" />
           <div className="absolute right-1/4 bottom-1/4 w-24 h-24 bg-gradient-to-br from-emerald-500/20 to-cyan-500/15 opacity-40 rounded-full blur-2xl animate-float-reverse" />
           <div className="absolute left-1/3 bottom-1/3 w-20 h-20 bg-gradient-to-br from-pink-500/30 to-purple-500/20 opacity-45 rounded-full blur-xl animate-float" style={{ animationDelay: '2s' }} />
           <div className="absolute right-1/3 top-1/4 w-16 h-16 bg-gradient-to-br from-yellow-500/25 to-orange-500/20 opacity-35 rounded-full blur-xl animate-float-reverse" style={{ animationDelay: '3s' }} />
 
-          {/* Enhanced grid pattern overlay */}
           <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:60px_60px] opacity-40" />
 
-          {/* Animated particles */}
           <div className="absolute inset-0">
             {[...Array(20)].map((_, i) => (
               <div
@@ -299,7 +409,6 @@ export default function GalleryPage() {
               </button>
 
               <div className="flex items-center gap-6">
-                {/* Enhanced Stats Display */}
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/60 backdrop-blur-sm border border-gray-700/40 rounded-xl">
                     <Database className="w-4 h-4 text-blue-400" />
@@ -315,7 +424,6 @@ export default function GalleryPage() {
                   </div>
                 </div>
 
-                {/* Enhanced User Profile */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-xl">
                     <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
@@ -356,9 +464,8 @@ export default function GalleryPage() {
 
               {/* Enhanced Gallery Controls */}
               <div className="flex items-center justify-center gap-6 mb-8">
-                {/* View Mode Toggle */}
                 <div className="flex items-center gap-2 bg-gray-900/60 backdrop-blur-sm border border-gray-700/40 rounded-xl p-1">
-                  {(['grid', 'masonry', 'carousel'] as const).map((mode) => (
+                  {(['grid', 'masonry', 'carousel'] as ViewMode[]).map((mode) => (
                     <button
                       key={mode}
                       onClick={() => setViewMode(mode)}
@@ -375,7 +482,6 @@ export default function GalleryPage() {
                   ))}
                 </div>
 
-                {/* Search Bar */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -387,7 +493,6 @@ export default function GalleryPage() {
                   />
                 </div>
 
-                {/* Filter Toggle */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-900/60 backdrop-blur-sm border border-gray-700/40 rounded-xl text-gray-300 hover:text-white transition-all duration-200"
@@ -405,7 +510,7 @@ export default function GalleryPage() {
                       <label className="text-sm text-gray-400 font-medium mb-2 block">Sort By</label>
                       <select
                         value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as 'date' | 'name' | 'size')}
+                        onChange={(e) => setSortBy(e.target.value as SortBy)}
                         className="w-full px-3 py-2 bg-gray-800/60 border border-gray-600/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                       >
                         <option value="date">Date Added</option>
@@ -466,7 +571,6 @@ export default function GalleryPage() {
                 </div>
               </div>
             ) : images.length === 0 ? (
-              /* Enhanced Empty State */
               <div className="text-center mt-24">
                 <div className="relative mx-auto w-40 h-40 mb-8">
                   <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full blur-2xl opacity-60" />
@@ -497,7 +601,7 @@ export default function GalleryPage() {
                 </div>
               </div>
             ) : (
-              /* Enhanced Image Gallery */
+              /* ✅ FIXED: Enhanced Image Gallery with proper TypeScript types */
               <PhotoProvider>
                 <section className={`grid gap-8 ${viewMode === 'grid'
                     ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
@@ -505,107 +609,105 @@ export default function GalleryPage() {
                       ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5'
                       : 'grid-cols-1'
                   }`}>
-                  {filteredImages.map((img, index) => (
-                    <PhotoView key={index} src={img.url}>
-                      <div className={`group relative bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-105 ${viewMode === 'masonry' ? 'break-inside-avoid mb-8' : ''
-                        }`}>
-                        {/* Enhanced Image Display with Error Handling */}
-                        {/* const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://alyan1-my-fastapi-backend.hf.space'; */}
-
-                        <div className="relative w-full h-64 aspect-square overflow-hidden">
-                          <Image
-                            src={`${backendUrl}${img.url}`}
-                            width={600}
-                            height={400}
-                            alt={`${type} image ${index + 1}`}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                            loading="lazy"
-                            onError={(e) => {
-                              console.error('Image failed to load:', `${backendUrl}${img.url}`);
-                              // Optional: Set a fallback image
-                              e.currentTarget.src = '/placeholder-image.jpg';
-                            }}
-                          />
-                          {/* Analysis Text Display */}
-                          {img.analysis && (
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white text-xs p-2 max-h-32 overflow-y-auto">
-                              <pre className="whitespace-pre-wrap break-words">{img.analysis}</pre>
-                            </div>
-                          )}
-                          {/* Enhanced Overlay Effects */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                          {/* Enhanced Image Info */}
-                          <div className="absolute bottom-0 left-0 right-0 p-6 transform translate-y-full group-hover:translate-y-0 transition-transform duration-500">
-                            <div className="flex items-center justify-between text-white mb-3">
-                              <div>
-                                <p className="text-lg font-bold capitalize">{type}</p>
-                                <p className="text-sm text-gray-300">Image #{index + 1}</p>
+                  {filteredImages.map((img: ImageData, index: number) => {
+                    // ✅ FIXED: Construct proper image URL
+                    const imageUrl = constructImageUrl(backendUrl, img.url);
+                    
+                    return (
+                      <PhotoView key={index} src={imageUrl}>
+                        <div className={`group relative bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-105 ${viewMode === 'masonry' ? 'break-inside-avoid mb-8' : ''
+                          }`}>
+                          {/* ✅ FIXED: Enhanced Image Display with proper error handling */}
+                          <div className="relative w-full h-64 aspect-square overflow-hidden">
+                            <SafeImage
+                    src={img.url}
+                    alt={img.filename}
+                    className="w-full h-48 object-cover"
+                  />
+                            
+                            {/* Analysis Text Display */}
+                            {img.analysis && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white text-xs p-2 max-h-32 overflow-y-auto">
+                                <pre className="whitespace-pre-wrap break-words">{img.analysis}</pre>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleFavorite(index)
-                                  }}
-                                  className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 ${favorites.has(index)
-                                      ? 'bg-red-500/80 text-white'
-                                      : 'bg-white/20 text-gray-300 hover:bg-red-500/60 hover:text-white'
-                                    }`}
-                                >
-                                  <Heart className={`w-5 h-5 ${favorites.has(index) ? 'fill-current' : ''}`} />
-                                </button>
-                                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                  <Eye className="w-5 h-5" />
+                            )}
+                            
+                            {/* Enhanced Overlay Effects */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                            
+                            {/* Enhanced Image Info */}
+                            <div className="absolute bottom-0 left-0 right-0 p-6 transform translate-y-full group-hover:translate-y-0 transition-transform duration-500">
+                              <div className="flex items-center justify-between text-white mb-3">
+                                <div>
+                                  <p className="text-lg font-bold capitalize">{type}</p>
+                                  <p className="text-sm text-gray-300">Image #{index + 1}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFavorite(index);
+                                    }}
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 ${favorites.has(index)
+                                        ? 'bg-red-500/80 text-white'
+                                        : 'bg-white/20 text-gray-300 hover:bg-red-500/60 hover:text-white'
+                                      }`}
+                                  >
+                                    <Heart className={`w-5 h-5 ${favorites.has(index) ? 'fill-current' : ''}`} />
+                                  </button>
+                                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                                    <Eye className="w-5 h-5" />
+                                  </div>
                                 </div>
                               </div>
+                              {/* Enhanced Action Buttons */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600/80 hover:bg-blue-600 rounded-lg text-xs font-medium transition-all duration-200"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const filename = img.filename || `${type}_image_${index + 1}.jpg`;
+                                    handleDownload(imageUrl, filename);
+                                  }}
+                                >
+                                  <Download className="w-3 h-3" />
+                                  Download
+                                </button>
+                                <button
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600/80 hover:bg-green-600 rounded-lg text-xs font-medium transition-all duration-200"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const filename = img.filename || `${type}_image_${index + 1}.jpg`;
+                                    handleShare(imageUrl, filename);
+                                  }}
+                                >
+                                  <Share2 className="w-3 h-3" />
+                                  Share
+                                </button>
+                                <button className="flex items-center gap-1 px-3 py-1.5 bg-purple-600/80 hover:bg-purple-600 rounded-lg text-xs font-medium transition-all duration-200">
+                                  <Star className="w-3 h-3" />
+                                  Rate
+                                </button>
+                              </div>
                             </div>
-                            {/* Enhanced Action Buttons */}
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600/80 hover:bg-blue-600 rounded-lg text-xs font-medium transition-all duration-200"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  const filename = img.filename || `${type}_image_${index + 1}.jpg`;
-                                  handleDownload(img.url, filename);
-                                }}
-                              >
-                                <Download className="w-3 h-3" />
-                                Download
-                              </button>
-                              <button
-                                className="flex items-center gap-1 px-3 py-1.5 bg-green-600/80 hover:bg-green-600 rounded-lg text-xs font-medium transition-all duration-200"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  const filename = img.filename || `${type}_image_${index + 1}.jpg`;
-                                  handleShare(img.url, filename);
-                                }}
-                              >
-                                <Share2 className="w-3 h-3" />
-                                Share
-                              </button>
-                              <button className="flex items-center gap-1 px-3 py-1.5 bg-purple-600/80 hover:bg-purple-600 rounded-lg text-xs font-medium transition-all duration-200">
-                                <Star className="w-3 h-3" />
-                                Rate
-                              </button>
+                            {/* Enhanced Corner Badge */}
+                            <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm rounded-xl px-3 py-1.5 border border-gray-600/50">
+                              <span className="text-sm font-bold text-white">#{index + 1}</span>
+                            </div>
+                            {/* Enhanced Status Indicators */}
+                            <div className="absolute top-4 right-4 flex items-center gap-2">
+                              <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
+                              <span className="text-xs text-emerald-400 font-medium">AI Verified</span>
                             </div>
                           </div>
-                          {/* Enhanced Corner Badge */}
-                          <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm rounded-xl px-3 py-1.5 border border-gray-600/50">
-                            <span className="text-sm font-bold text-white">#{index + 1}</span>
-                          </div>
-                          {/* Enhanced Status Indicators */}
-                          <div className="absolute top-4 right-4 flex items-center gap-2">
-                            <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
-                            <span className="text-xs text-emerald-400 font-medium">AI Verified</span>
-                          </div>
+                          {/* Enhanced Hover Glow Effect */}
+                          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                          {/* Enhanced Border Glow */}
+                          <div className="absolute inset-0 rounded-3xl border-2 border-transparent group-hover:border-purple-500/50 transition-all duration-500" />
                         </div>
-                        {/* Enhanced Hover Glow Effect */}
-                        <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                        {/* Enhanced Border Glow */}
-                        <div className="absolute inset-0 rounded-3xl border-2 border-transparent group-hover:border-purple-500/50 transition-all duration-500" />
-                      </div>
-                    </PhotoView>
-                  ))}
+                      </PhotoView>
+                    );
+                  })}
                 </section>
               </PhotoProvider>
             )}
@@ -647,7 +749,7 @@ export default function GalleryPage() {
                   </span>
                   <span className="flex items-center gap-1">
                     <BarChart3 className="w-3 h-3" />
-                    {Object.keys(images).length} categories
+                    {images.length} total images
                   </span>
                 </div>
 
@@ -662,5 +764,5 @@ export default function GalleryPage() {
         </div>
       </div>
     </ProtectedRoute>
-  )
+  );
 }
