@@ -1,21 +1,21 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import Image  from 'next/image'
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { PhotoProvider, PhotoView } from 'react-photo-view'
 import 'react-photo-view/dist/react-photo-view.css'
-import { 
-  ArrowLeft, 
+import {
+  ArrowLeft,
   // Image as ImageIcon, 
   // Loader2, 
-  Sparkles, 
-  Eye, 
-  Grid3X3, 
-  Calendar, 
-  Database, 
-  LogOut, 
-  User, 
+  Sparkles,
+  Eye,
+  Grid3X3,
+  Calendar,
+  Database,
+  LogOut,
+  User,
   Filter,
   Search,
   Download,
@@ -48,26 +48,26 @@ async function handleDownload(url: string, filename?: string) {
         'Origin': window.location.origin
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const blob = await response.blob();
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = filename || url.split('/').pop() || 'image.jpg';
     document.body.appendChild(link);
     link.click();
-    
+
     setTimeout(() => {
       URL.revokeObjectURL(link.href);
       link.remove();
     }, 100);
-    
+
   } catch (err) {
     console.error('Primary download method failed:', err);
-    
+
     // Fallback: Try direct link download (may not work with CORS but worth trying)
     try {
       const link = document.createElement('a');
@@ -80,7 +80,7 @@ async function handleDownload(url: string, filename?: string) {
       link.remove();
     } catch (fallbackErr) {
       console.error('Fallback download failed:', fallbackErr);
-      
+
       // Final fallback: Open in new tab
       const newWindow = window.open(url, '_blank');
       if (!newWindow) {
@@ -125,31 +125,31 @@ async function handleShare(url: string, filename?: string) {
 }
 
 // Function to download all images
-async function handleBulkDownload(images: Array<{url: string; filename: string}>, type: string) {
+async function handleBulkDownload(images: Array<{ url: string; filename: string }>, type: string) {
   if (images.length === 0) {
     alert('No images to download.');
     return;
   }
-  
+
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-  
+
   // Show progress to user
   const totalImages = images.length;
   let downloadedCount = 0;
-  
+
   for (let i = 0; i < images.length; i++) {
     const img = images[i];
     const filename = img.filename || `${type}_image_${i + 1}.jpg`;
-    
+
     try {
       await handleDownload(img.url, filename);
       downloadedCount++;
-      
+
       // Update user on progress (you could replace this with a toast notification)
       if (i === images.length - 1) {
         console.log(`Download complete: ${downloadedCount}/${totalImages} images`);
       }
-      
+
       // Add delay between downloads to prevent overwhelming the browser
       if (i < images.length - 1) {
         await delay(1000); // Increased delay to prevent CORS issues
@@ -158,15 +158,15 @@ async function handleBulkDownload(images: Array<{url: string; filename: string}>
       console.error(`Failed to download image ${i + 1}:`, error);
     }
   }
-  
+
   alert(`Bulk download initiated for ${totalImages} images. Check your downloads folder.`);
 }
 
 // Function to share gallery
-async function handleBulkShare(images: Array<{url: string; filename: string}>, type: string) {
+async function handleBulkShare(images: Array<{ url: string; filename: string }>, type: string) {
   const galleryText = `Check out this AI-classified ${type} gallery with ${images.length} images!`;
   const firstImageUrl = images[0]?.url;
-  
+
   if (navigator.share && firstImageUrl) {
     try {
       await navigator.share({
@@ -192,7 +192,7 @@ async function handleBulkShare(images: Array<{url: string; filename: string}>, t
 
 export default function GalleryPage() {
   const params = useParams();
-const type = typeof params?.type === 'string' ? params.type : '';
+  const type = typeof params?.type === 'string' ? params.type : '';
 
   const router = useRouter()
   const { user, logout } = useAuth()
@@ -206,21 +206,29 @@ const type = typeof params?.type === 'string' ? params.type : '';
   const [showFilters, setShowFilters] = useState(false)
   const [favorites, setFavorites] = useState<Set<number>>(new Set())
 
+  // ✅ BEST PRACTICE: Define outside useEffect to avoid recreation
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://alyan1-my-fastapi-backend.hf.space';
+
   useEffect(() => {
     if (!type || !type.trim()) return
     setLoading(true)
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-  fetch(`${backendUrl}/api/images/${type}`)
-    .then(res => res.json())
-    .then(data => setImages(data.images || []))
-    .catch(err => {
-    console.error('Image fetch error:', err);
-    setImages([]);
-    }).finally(() => setLoading(false))
-  }, [type])
-
+    fetch(`${backendUrl}/api/images/${type}`, {
+      credentials: 'include', // ✅ FIXED: Include session cookies for authentication
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => setImages(data.images || []))
+      .catch(err => {
+        console.error('Image fetch error:', err);
+        setImages([]);
+      })
+      .finally(() => setLoading(false))
+  }, [type]) // Don't forget to add the dependency array!
   const handleLogout = () => {
     logout()
   }
@@ -235,7 +243,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
     setFavorites(newFavorites)
   }
 
-  const filteredImages = images.filter((img, index) => 
+  const filteredImages = images.filter((img, index) =>
     searchTerm === '' || `Image ${index + 1}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -247,17 +255,17 @@ const type = typeof params?.type === 'string' ? params.type : '';
           {/* Multiple gradient orbs with different animations */}
           <div className="absolute top-[-20%] left-[-20%] w-[800px] h-[800px] bg-gradient-to-br from-purple-600/15 via-blue-600/10 to-cyan-600/8 rounded-full blur-3xl animate-pulse-slow" />
           <div className="absolute bottom-[-20%] right-[-20%] w-[900px] h-[900px] bg-gradient-to-br from-emerald-600/12 via-teal-600/8 to-blue-600/10 rounded-full blur-3xl animate-pulse-slower" />
-          <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-gradient-to-br from-indigo-600/18 via-purple-600/12 to-pink-600/10 rounded-full blur-2xl animate-pulse" style={{transform: 'translate(-50%, -50%)'}} />
-          
+          <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-gradient-to-br from-indigo-600/18 via-purple-600/12 to-pink-600/10 rounded-full blur-2xl animate-pulse" style={{ transform: 'translate(-50%, -50%)' }} />
+
           {/* Floating geometric shapes with enhanced animations */}
           <div className="absolute left-1/4 top-1/3 w-40 h-40 bg-gradient-to-br from-purple-500/25 to-blue-500/15 opacity-50 rounded-full blur-2xl animate-float" />
           <div className="absolute right-1/4 bottom-1/4 w-24 h-24 bg-gradient-to-br from-emerald-500/20 to-cyan-500/15 opacity-40 rounded-full blur-2xl animate-float-reverse" />
-          <div className="absolute left-1/3 bottom-1/3 w-20 h-20 bg-gradient-to-br from-pink-500/30 to-purple-500/20 opacity-45 rounded-full blur-xl animate-float" style={{animationDelay: '2s'}} />
-          <div className="absolute right-1/3 top-1/4 w-16 h-16 bg-gradient-to-br from-yellow-500/25 to-orange-500/20 opacity-35 rounded-full blur-xl animate-float-reverse" style={{animationDelay: '3s'}} />
-          
+          <div className="absolute left-1/3 bottom-1/3 w-20 h-20 bg-gradient-to-br from-pink-500/30 to-purple-500/20 opacity-45 rounded-full blur-xl animate-float" style={{ animationDelay: '2s' }} />
+          <div className="absolute right-1/3 top-1/4 w-16 h-16 bg-gradient-to-br from-yellow-500/25 to-orange-500/20 opacity-35 rounded-full blur-xl animate-float-reverse" style={{ animationDelay: '3s' }} />
+
           {/* Enhanced grid pattern overlay */}
           <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:60px_60px] opacity-40" />
-          
+
           {/* Animated particles */}
           <div className="absolute inset-0">
             {[...Array(20)].map((_, i) => (
@@ -289,7 +297,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                   <span className="text-sm font-semibold">Back to Results</span>
                 </div>
               </button>
-              
+
               <div className="flex items-center gap-6">
                 {/* Enhanced Stats Display */}
                 <div className="flex items-center gap-4">
@@ -306,7 +314,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                     <span className="text-sm text-gray-300 font-medium">{favorites.size} favorites</span>
                   </div>
                 </div>
-                
+
                 {/* Enhanced User Profile */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-xl">
@@ -317,7 +325,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                       {user?.name}
                     </span>
                   </div>
-                  
+
                   <button
                     onClick={handleLogout}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-900/80 hover:bg-red-900/80 backdrop-blur-sm border border-gray-700/50 hover:border-red-600/50 rounded-xl transition-all duration-300 text-gray-300 hover:text-white hover:scale-105"
@@ -340,12 +348,12 @@ const type = typeof params?.type === 'string' ? params.type : '';
                   {type ? type.charAt(0).toUpperCase() + type.slice(1) : type} Gallery
                 </h1>
               </div>
-              
+
               <p className="text-2xl text-gray-300 font-medium max-w-3xl mx-auto leading-relaxed mb-8">
-                Explore the AI-classified images in the <span className="text-purple-300 font-semibold">{type}</span> category. 
+                Explore the AI-classified images in the <span className="text-purple-300 font-semibold">{type}</span> category.
                 Each image has been processed with advanced machine learning algorithms for precise classification.
               </p>
-              
+
               {/* Enhanced Gallery Controls */}
               <div className="flex items-center justify-center gap-6 mb-8">
                 {/* View Mode Toggle */}
@@ -354,11 +362,10 @@ const type = typeof params?.type === 'string' ? params.type : '';
                     <button
                       key={mode}
                       onClick={() => setViewMode(mode)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        viewMode === mode
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${viewMode === mode
                           ? 'bg-purple-600 text-white shadow-lg'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                      }`}
+                        }`}
                     >
                       {mode === 'grid' && <Grid3X3 className="w-4 h-4 inline mr-2" />}
                       {mode === 'masonry' && <BarChart3 className="w-4 h-4 inline mr-2" />}
@@ -367,7 +374,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                     </button>
                   ))}
                 </div>
-                
+
                 {/* Search Bar */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -379,7 +386,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                     className="pl-10 pr-4 py-2 bg-gray-900/60 backdrop-blur-sm border border-gray-700/40 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 w-64"
                   />
                 </div>
-                
+
                 {/* Filter Toggle */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
@@ -389,7 +396,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                   <span className="text-sm font-medium">Filters</span>
                 </button>
               </div>
-              
+
               {/* Advanced Filters Panel */}
               {showFilters && (
                 <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6 mb-8 animate-fade-in">
@@ -418,14 +425,14 @@ const type = typeof params?.type === 'string' ? params.type : '';
                     <div>
                       <label className="text-sm text-gray-400 font-medium mb-2 block">Actions</label>
                       <div className="flex items-center gap-2">
-                        <button 
+                        <button
                           onClick={() => handleBulkDownload(filteredImages, type)}
                           className="flex items-center gap-1 px-3 py-1 bg-blue-600/60 hover:bg-blue-600/80 rounded-lg text-sm transition-all duration-200"
                         >
                           <Download className="w-3 h-3" />
                           Export All
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleBulkShare(filteredImages, type)}
                           className="flex items-center gap-1 px-3 py-1 bg-green-600/60 hover:bg-green-600/80 rounded-lg text-sm transition-all duration-200"
                         >
@@ -444,8 +451,8 @@ const type = typeof params?.type === 'string' ? params.type : '';
               <div className="flex flex-col items-center justify-center mt-24 space-y-8">
                 <div className="relative">
                   <div className="h-24 w-24 border-4 border-purple-500/30 border-t-purple-500 animate-spin rounded-full" />
-                  <div className="absolute inset-0 h-24 w-24 border-4 border-blue-500/20 border-t-blue-500 animate-spin rounded-full" style={{animationDelay: '0.5s'}} />
-                  <div className="absolute inset-0 h-24 w-24 border-4 border-emerald-500/15 border-t-emerald-500 animate-spin rounded-full" style={{animationDelay: '1s'}} />
+                  <div className="absolute inset-0 h-24 w-24 border-4 border-blue-500/20 border-t-blue-500 animate-spin rounded-full" style={{ animationDelay: '0.5s' }} />
+                  <div className="absolute inset-0 h-24 w-24 border-4 border-emerald-500/15 border-t-emerald-500 animate-spin rounded-full" style={{ animationDelay: '1s' }} />
                 </div>
                 <div className="text-center">
                   <p className="text-purple-400 text-2xl font-semibold animate-pulse mb-3">
@@ -469,7 +476,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                 </div>
                 <h3 className="text-4xl font-bold text-white mb-6">No Images Found</h3>
                 <p className="text-gray-400 text-xl mb-10 max-w-2xl mx-auto">
-                  No images were found in the <span className="text-purple-300 font-semibold">{type}</span> category. 
+                  No images were found in the <span className="text-purple-300 font-semibold">{type}</span> category.
                   Try a different category or check back later for new AI-classified content.
                 </p>
                 <div className="flex items-center justify-center gap-4">
@@ -492,28 +499,33 @@ const type = typeof params?.type === 'string' ? params.type : '';
             ) : (
               /* Enhanced Image Gallery */
               <PhotoProvider>
-                <section className={`grid gap-8 ${
-                  viewMode === 'grid' 
+                <section className={`grid gap-8 ${viewMode === 'grid'
                     ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
                     : viewMode === 'masonry'
-                    ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5'
-                    : 'grid-cols-1'
-                }`}>
+                      ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5'
+                      : 'grid-cols-1'
+                  }`}>
                   {filteredImages.map((img, index) => (
                     <PhotoView key={index} src={img.url}>
-                      <div className={`group relative bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-105 ${
-                        viewMode === 'masonry' ? 'break-inside-avoid mb-8' : ''
-                      }`}>
-                        {/* Enhanced Image Container */}
-                       <div className="relative w-full h-64 aspect-square overflow-hidden">
-                       <Image
-                        src={`${process.env.NEXT_PUBLIC_API_BASE_URL}${img.url}`}
-                        width={600}
-                        height={400}
-                        alt={`${type} image ${index + 1}`}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        loading="lazy"
-                        />
+                      <div className={`group relative bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-105 ${viewMode === 'masonry' ? 'break-inside-avoid mb-8' : ''
+                        }`}>
+                        {/* Enhanced Image Display with Error Handling */}
+                        {/* const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://alyan1-my-fastapi-backend.hf.space'; */}
+
+                        <div className="relative w-full h-64 aspect-square overflow-hidden">
+                          <Image
+                            src={`${backendUrl}${img.url}`}
+                            width={600}
+                            height={400}
+                            alt={`${type} image ${index + 1}`}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            loading="lazy"
+                            onError={(e) => {
+                              console.error('Image failed to load:', `${backendUrl}${img.url}`);
+                              // Optional: Set a fallback image
+                              e.currentTarget.src = '/placeholder-image.jpg';
+                            }}
+                          />
                           {/* Analysis Text Display */}
                           {img.analysis && (
                             <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white text-xs p-2 max-h-32 overflow-y-auto">
@@ -535,11 +547,10 @@ const type = typeof params?.type === 'string' ? params.type : '';
                                     e.stopPropagation()
                                     toggleFavorite(index)
                                   }}
-                                  className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 ${
-                                    favorites.has(index)
+                                  className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 ${favorites.has(index)
                                       ? 'bg-red-500/80 text-white'
                                       : 'bg-white/20 text-gray-300 hover:bg-red-500/60 hover:text-white'
-                                  }`}
+                                    }`}
                                 >
                                   <Heart className={`w-5 h-5 ${favorites.has(index) ? 'fill-current' : ''}`} />
                                 </button>
@@ -624,7 +635,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                     <p className="text-gray-400 text-sm">Any image type</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-center gap-6 text-sm text-gray-400 mb-4">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
@@ -639,7 +650,7 @@ const type = typeof params?.type === 'string' ? params.type : '';
                     {Object.keys(images).length} categories
                   </span>
                 </div>
-                
+
                 <div className="text-center">
                   <p className="text-gray-500 text-xs">
                     Built with 💙 for AI innovation · UniversalAI © {new Date().getFullYear()}

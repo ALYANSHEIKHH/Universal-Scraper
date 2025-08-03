@@ -23,6 +23,9 @@ interface PredictionResult {
   probabilities: { [key: string]: number }
 }
 
+// ✅ FIXED: Use your actual backend URL
+const API_BASE_URL = 'https://alyan1-my-fastapi-backend.hf.space'
+
 export default function HeroSection({
   onSummary,
 }: {
@@ -40,25 +43,37 @@ export default function HeroSection({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!url) return
-    if (!isImageUrl(url)) {
-      toast.error('Please provide a direct image URL (ending with .jpg, .png, etc.)')
-      return
-    }
-
+    
+    // ✅ FIXED: Removed image URL validation to allow webpage scraping
     setLoading(true)
     toast.loading('Scraping images from URL...')
 
     try {
-      const res = await fetch('http://localhost:8000/api/scrape', {
+      // ✅ FIXED: Use correct backend URL and add credentials
+      const res = await fetch(`${API_BASE_URL}/api/scrape`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // ✅ FIXED: Include session cookies
+        body: JSON.stringify({ 
+          url,
+          max_images: 10 // ✅ FIXED: Add max_images parameter
+        }),
       })
+      
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.detail || 'Scraping failed')
+      }
+      
       const data = await res.json()
       onSummary(data.summary)
-      toast.success('Images scraped and classified with AI!')
-    } catch {
-      toast.error('Scrape failed. Check the URL or server.')
+      toast.success(`✅ ${data.total_processed} images scraped and classified with AI!`)
+    } catch (error) {
+      console.error('Scraping error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      toast.error(`Scrape failed: ${errorMessage}`)
     } finally {
       toast.dismiss()
       setLoading(false)
@@ -76,16 +91,25 @@ export default function HeroSection({
     Array.from(files).forEach(file => formData.append('files', file))
 
     try {
-      const res = await fetch('http://localhost:8000/api/upload', {
+      // ✅ FIXED: Use correct backend URL and add credentials
+      const res = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
+        credentials: 'include', // ✅ FIXED: Include session cookies
         body: formData,
       })
 
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.detail || 'Upload failed')
+      }
+
       const data = await res.json()
       onSummary(data.summary)
-      toast.success('Images uploaded and classified with AI!')
-    } catch {
-      toast.error('Image upload failed.')
+      toast.success(`✅ ${data.total_processed} images uploaded and classified with AI!`)
+    } catch (error) {
+      console.error('Upload error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      toast.error(`Image upload failed: ${errorMessage}`)
     } finally {
       toast.dismiss()
     }
@@ -101,18 +125,27 @@ export default function HeroSection({
     formData.append('file', file)
 
     try {
-      const res = await fetch('http://localhost:8000/api/predict', {
+      // ✅ FIXED: Use correct backend URL and add credentials
+      const res = await fetch(`${API_BASE_URL}/api/predict`, {
         method: 'POST',
+        credentials: 'include', // ✅ FIXED: Include session cookies
         body: formData,
       })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.detail || 'Prediction failed')
+      }
 
       const data = await res.json()
       setPredictionResult(data)
       toast.success(
         `AI Prediction: ${data.prediction.toUpperCase()} (${Math.round(data.confidence * 100)}% confidence)`
       )
-    } catch {
-      toast.error('AI prediction failed.')
+    } catch (error) {
+      console.error('Prediction error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      toast.error(`AI prediction failed: ${errorMessage}`)
     } finally {
       toast.dismiss()
     }
@@ -131,20 +164,36 @@ export default function HeroSection({
     formData.append('file', file)
 
     try {
-      const res = await fetch('http://localhost:8000/api/upload-kaggle', {
+      // ✅ FIXED: Use correct backend URL and add credentials
+      const res = await fetch(`${API_BASE_URL}/api/upload-kaggle`, {
         method: 'POST',
+        credentials: 'include', // ✅ FIXED: Include session cookies
         body: formData,
       })
 
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.detail || 'Kaggle upload failed')
+      }
+
       const data = await res.json()
       onSummary(data.summary)
-      toast.success('Kaggle dataset processed and classified with AI!')
-    } catch {
-      toast.error('Kaggle upload failed.')
+      toast.success(`✅ Kaggle dataset processed: ${data.total_processed} images classified with AI!`)
+    } catch (error) {
+      console.error('Kaggle upload error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      toast.error(`Kaggle upload failed: ${errorMessage}`)
     } finally {
       toast.dismiss()
     }
   }
+
+  // ... rest of your component JSX remains the same
+
+  
+
+  // ... rest of your component JSX remains the same
+
 
   return (
     <section className="relative w-full min-h-screen flex items-center justify-center overflow-hidden bg-black text-white">

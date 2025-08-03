@@ -30,6 +30,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// ✅ FIXED: Use your actual backend URL consistently
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://alyan1-my-fastapi-backend.hf.space'
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [userStats, setUserStats] = useState<UserStats | null>(null)
@@ -55,11 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/stats`, {
+      // ✅ FIXED: Use correct backend URL and session-based auth
+      const response = await fetch(`${API_BASE_URL}/api/auth/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // ✅ FIXED: Include session cookies
         signal: controller.signal
       })
       
@@ -115,9 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout for login
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/login`, {
+      // ✅ FIXED: Use correct backend URL and session-based auth
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // ✅ FIXED: Include session cookies
         body: JSON.stringify({ email, password }),
         signal: controller.signal
       })
@@ -148,14 +155,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Login error:', error)
+      let errorMessage = 'Network error. Please check your connection.'
+      
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          return { success: false, message: 'Login request timed out. Please check your connection and try again.' }
+          errorMessage = 'Login request timed out. Please check your connection and try again.'
         } else if (error.message.includes('Failed to fetch')) {
-          return { success: false, message: 'Cannot connect to server. Please check if the backend is running.' }
+          errorMessage = 'Cannot connect to server. Please check if the backend is running.'
         }
       }
-      return { success: false, message: 'Network error. Please check your connection.' }
+      return { success: false, message: errorMessage }
     } finally {
       setLoading(false)
     }
@@ -168,9 +177,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout for register
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/register`, {
+      // ✅ FIXED: Use correct backend URL and session-based auth
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // ✅ FIXED: Include session cookies
         body: JSON.stringify({ name, email, password }),
         signal: controller.signal
       })
@@ -199,14 +210,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Registration error:', error)
+      let errorMessage = 'Network error. Please check your connection.'
+      
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          return { success: false, message: 'Registration request timed out. Please check your connection and try again.' }
+          errorMessage = 'Registration request timed out. Please check your connection and try again.'
         } else if (error.message.includes('Failed to fetch')) {
-          return { success: false, message: 'Cannot connect to server. Please check if the backend is running.' }
+          errorMessage = 'Cannot connect to server. Please check if the backend is running.'
         }
       }
-      return { success: false, message: 'Network error. Please check your connection.' }
+      return { success: false, message: errorMessage }
     } finally {
       setLoading(false)
     }
@@ -222,12 +235,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout for profile update
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/profile`, {
+      // ✅ FIXED: Use correct backend URL and session-based auth
+      const response = await fetch(`${API_BASE_URL}/api/auth/profile`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // ✅ FIXED: Include session cookies
         body: JSON.stringify({ name }),
         signal: controller.signal
       })
@@ -245,14 +260,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Profile update error:', error)
+      let errorMessage = 'Network error. Please try again.'
+      
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          return { success: false, message: 'Profile update timed out. Please try again.' }
+          errorMessage = 'Profile update timed out. Please try again.'
         } else if (error.message.includes('Failed to fetch')) {
-          return { success: false, message: 'Cannot connect to server. Please check if the backend is running.' }
+          errorMessage = 'Cannot connect to server. Please check if the backend is running.'
         }
       }
-      return { success: false, message: 'Network error. Please try again.' }
+      return { success: false, message: errorMessage }
     }
   }
 
@@ -263,12 +280,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout for logout
         
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/logout`, {
+        // ✅ FIXED: Use correct backend URL and session-based auth
+        await fetch(`${API_BASE_URL}/api/auth/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
+          credentials: 'include', // ✅ FIXED: Include session cookies
           signal: controller.signal
         })
         
