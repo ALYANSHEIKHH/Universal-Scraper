@@ -32,6 +32,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 
+
 // ✅ FIXED: TypeScript interfaces
 interface ImageData {
   url: string;
@@ -67,68 +68,157 @@ interface AuthContextType {
 type ViewMode = 'grid' | 'masonry' | 'carousel';
 type SortBy = 'date' | 'name' | 'size';
 
-// ✅ FIXED: Safe URL construction utility
-const constructImageUrl = (baseUrl: string, imgUrl: string): string => {
+const getBackendUrl = (): string => {
+  const envUrl =
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.REACT_APP_API_URL;
+
+  const defaultUrl = 'https://alyan1-my-fastapi-backend.hf.space';
+  const devUrl = 'http://localhost:8000';
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
+  console.log('Environment check:', {
+    NODE_ENV: process.env.NODE_ENV,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    envUrl,
+    isDevelopment,
+    resolvedUrl: envUrl || (isDevelopment ? devUrl : defaultUrl),
+  });
+
+  return envUrl || (isDevelopment ? devUrl : defaultUrl);
+};
+
+
+ const constructImageUrl = (baseUrl: string, imgUrl: string): string => {
   if (!baseUrl || !imgUrl) {
     console.warn('Missing baseUrl or imgUrl:', { baseUrl, imgUrl });
-    return '/placeholder-image.jpg';
+    return createPlaceholderSVG();
   }
-  
-  // Clean base URL - remove trailing slash
+
   const cleanBaseUrl = baseUrl.replace(/\/$/, '');
-  
-  // Ensure image URL has leading slash if it doesn't start with http
-  let cleanImgUrl = imgUrl;
-  if (!imgUrl.startsWith('http')) {
-    cleanImgUrl = imgUrl.startsWith('/') ? imgUrl : `/${imgUrl}`;
+
+  // If imgUrl is just a filename → prepend folder
+  if (!imgUrl.startsWith('/') && !imgUrl.startsWith('http')) {
+    imgUrl = `/images/person/${imgUrl}`;
   }
-  
-  const finalUrl = imgUrl.startsWith('http') ? imgUrl : `${cleanBaseUrl}${cleanImgUrl}`;
-  
+
+  let finalUrl = imgUrl.startsWith('http')
+    ? imgUrl
+    : `${cleanBaseUrl}${imgUrl}`;
+
+  // 🚨 Fallback fix: replace localhost with huggingface
+  if (finalUrl.includes('localhost:8000')) {
+    finalUrl = finalUrl.replace(
+      'http://localhost:8000',
+      'https://alyan1-my-fastapi-backend.hf.space'
+    );
+  }
+
   console.log('URL Construction:', {
     baseUrl,
     imgUrl,
     cleanBaseUrl,
-    cleanImgUrl,
     finalUrl
   });
-  
+
   return finalUrl;
 };
 
+
+
+// 3. Create inline SVG placeholder function
+const createPlaceholderSVG = (): string => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+      <defs>
+        <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#1f2937"/>
+          <stop offset="100%" style="stop-color:#111827"/>
+        </linearGradient>
+      </defs>
+      <rect width="400" height="300" fill="url(#bg-grad)"/>
+      <g transform="translate(200,130)">
+        <circle r="25" fill="#374151" opacity="0.8"/>
+        <path d="M-12,-8 L-4,-16 L4,-8 L12,-12 L20,4 L-20,4 Z" fill="#4b5563"/>
+      </g>
+      <text x="200" y="200" text-anchor="middle" fill="#6b7280" font-family="system-ui, sans-serif" font-size="14" font-weight="500">
+        Image not available
+      </text>
+      <text x="200" y="220" text-anchor="middle" fill="#4b5563" font-family="system-ui, sans-serif" font-size="11">
+        Connection issue
+      </text>
+    </svg>
+  `;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+};
+
+// ✅ FIXED: Safe URL construction utility
+
+
+// Clean base URL - remove trailing slash
+//   const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+
+//   // Ensure image URL has leading slash if it doesn't start with http
+//   let cleanImgUrl = imgUrl;
+//   if (!imgUrl.startsWith('http')) {
+//     cleanImgUrl = imgUrl.startsWith('/') ? imgUrl : `/${imgUrl}`;
+//   }
+
+//   const finalUrl = imgUrl.startsWith('http') ? imgUrl : `${cleanBaseUrl}${cleanImgUrl}`;
+
+//   console.log('URL Construction:', {
+//     baseUrl,
+//     imgUrl,
+//     cleanBaseUrl,
+//     cleanImgUrl,
+//     finalUrl
+//   });
+
+//   return finalUrl;
+// };
+
 // ✅ FIXED: Enhanced Image component with proper TypeScript
-const SafeImage: React.FC<SafeImageProps> = ({ 
-  src, 
-  alt, 
-  className = '', 
-  onError, 
+const SafeImage: React.FC<SafeImageProps> = ({
+  src,
+  alt,
+  className = '',
+  onError,
   onLoad,
   loading = 'lazy',
-  ...props 
+  ...props
 }) => {
   const [imageError, setImageError] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [retryCount, setRetryCount] = useState<number>(0);
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     console.error('Image failed to load:', src);
-    
-    // CRITICAL: Prevent infinite loop
+
     const target = e.currentTarget;
-    target.onerror = null;
-    
-    // Set fallback image
-    target.src = '/placeholder-image.svg';
+    target.onerror = null; // Prevent infinite loop
 
+    // If this is the first failure, try with different URL construction
+    if (retryCount === 0 && src.includes('localhost:8000')) {
+      console.log('Localhost failed, trying Hugging Face backend...');
+      const newSrc = src.replace('http://localhost:8000', 'https://alyan1-my-fastapi-backend.hf.space');
+      target.src = newSrc;
+      setRetryCount(1);
+      return;
+    }
 
+    // Final fallback: use placeholder
+    target.src = createPlaceholderSVG();
     setImageError(true);
     setIsLoading(false);
-    
+
     if (onError) onError(e);
   };
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     setIsLoading(false);
     setImageError(false);
+    setRetryCount(0);
     if (onLoad) onLoad(e);
   };
 
@@ -139,7 +229,7 @@ const SafeImage: React.FC<SafeImageProps> = ({
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
         </div>
       )}
-      
+
       <img
         src={src}
         alt={alt}
@@ -149,10 +239,10 @@ const SafeImage: React.FC<SafeImageProps> = ({
         loading={loading}
         {...props}
       />
-      
+
       {imageError && (
-        <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded z-20">
-          Failed to load
+        <div className="absolute top-2 right-2 bg-red-500/80 text-white text-xs px-2 py-1 rounded backdrop-blur-sm z-20">
+          Backend offline
         </div>
       )}
     </div>
@@ -309,39 +399,53 @@ export default function GalleryPage(): JSX.Element {
 
   const [images, setImages] = useState<ImageData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [backendError, setBackendError] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
 
-  // ✅ FIXED: Define backend URL properly
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://alyan1-my-fastapi-backend.hf.space';
+  const backendUrl = getBackendUrl();
 
-   useEffect(() => {
-    if (!type) return
-    setLoading(true)
+  // ✅ FIXED: Define backend URL properly
+  useEffect(() => {
+    if (!type || !type.trim()) return;
+    setLoading(true);
+    setBackendError(false);
+
+    console.log('Fetching images from:', `${backendUrl}/api/images/${type}`);
 
     fetch(`${backendUrl}/api/images/${type}`, {
       credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      }
     })
       .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
-        return res.json()
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status} - ${res.statusText}`);
+        }
+        return res.json();
       })
       .then((data: { images: ImageData[] }) => {
-        const fixedImages = data.images.map(img => ({
-          ...img,
-          url: constructImageUrl(backendUrl, img.url),
-        }))
-        setImages(fixedImages)
+        console.log('Fetched images data:', data);
+        setImages(data.images || []);
+        setBackendError(false);
       })
       .catch(err => {
-        console.error('Image fetch error:', err)
-        setImages([])
+        console.error('Image fetch error:', err);
+        setImages([]);
+        setBackendError(true);
+
+        // Show user-friendly error message
+        if (err.message.includes('Failed to fetch') || err.message.includes('CONNECTION_REFUSED')) {
+          console.error('Backend server appears to be offline');
+        }
       })
-      .finally(() => setLoading(false))
-  }, [type, backendUrl])
+      .finally(() => setLoading(false));
+  }, [type, backendUrl]);
 
   const handleLogout = (): void => {
     logout();
@@ -470,8 +574,8 @@ export default function GalleryPage(): JSX.Element {
                       key={mode}
                       onClick={() => setViewMode(mode)}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${viewMode === mode
-                          ? 'bg-purple-600 text-white shadow-lg'
-                          : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                        ? 'bg-purple-600 text-white shadow-lg'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                         }`}
                     >
                       {mode === 'grid' && <Grid3X3 className="w-4 h-4 inline mr-2" />}
@@ -604,15 +708,15 @@ export default function GalleryPage(): JSX.Element {
               /* ✅ FIXED: Enhanced Image Gallery with proper TypeScript types */
               <PhotoProvider>
                 <section className={`grid gap-8 ${viewMode === 'grid'
-                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
-                    : viewMode === 'masonry'
-                      ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5'
-                      : 'grid-cols-1'
+                  ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+                  : viewMode === 'masonry'
+                    ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5'
+                    : 'grid-cols-1'
                   }`}>
                   {filteredImages.map((img: ImageData, index: number) => {
                     // ✅ FIXED: Construct proper image URL
                     const imageUrl = constructImageUrl(backendUrl, img.url);
-                    
+
                     return (
                       <PhotoView key={index} src={imageUrl}>
                         <div className={`group relative bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-105 ${viewMode === 'masonry' ? 'break-inside-avoid mb-8' : ''
@@ -620,21 +724,22 @@ export default function GalleryPage(): JSX.Element {
                           {/* ✅ FIXED: Enhanced Image Display with proper error handling */}
                           <div className="relative w-full h-64 aspect-square overflow-hidden">
                             <SafeImage
-                    src={img.url}
-                    alt={img.filename}
-                    className="w-full h-48 object-cover"
-                  />
-                            
+                              src={imageUrl}
+                              alt={`${type} image ${index + 1}`}
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                              loading="lazy"
+                            />
+
                             {/* Analysis Text Display */}
                             {img.analysis && (
                               <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white text-xs p-2 max-h-32 overflow-y-auto">
                                 <pre className="whitespace-pre-wrap break-words">{img.analysis}</pre>
                               </div>
                             )}
-                            
+
                             {/* Enhanced Overlay Effects */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                            
+
                             {/* Enhanced Image Info */}
                             <div className="absolute bottom-0 left-0 right-0 p-6 transform translate-y-full group-hover:translate-y-0 transition-transform duration-500">
                               <div className="flex items-center justify-between text-white mb-3">
@@ -649,8 +754,8 @@ export default function GalleryPage(): JSX.Element {
                                       toggleFavorite(index);
                                     }}
                                     className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 ${favorites.has(index)
-                                        ? 'bg-red-500/80 text-white'
-                                        : 'bg-white/20 text-gray-300 hover:bg-red-500/60 hover:text-white'
+                                      ? 'bg-red-500/80 text-white'
+                                      : 'bg-white/20 text-gray-300 hover:bg-red-500/60 hover:text-white'
                                       }`}
                                   >
                                     <Heart className={`w-5 h-5 ${favorites.has(index) ? 'fill-current' : ''}`} />
@@ -705,6 +810,7 @@ export default function GalleryPage(): JSX.Element {
                           {/* Enhanced Border Glow */}
                           <div className="absolute inset-0 rounded-3xl border-2 border-transparent group-hover:border-purple-500/50 transition-all duration-500" />
                         </div>
+                        
                       </PhotoView>
                     );
                   })}
