@@ -68,26 +68,33 @@ interface AuthContextType {
 type ViewMode = 'grid' | 'masonry' | 'carousel';
 type SortBy = 'date' | 'name' | 'size';
 
+const getFixedUrl = (url: string): string => {
+  return url.replace("http://localhost:8000", "https://alyan1-my-fastapi-backend.hf.space");
+};
+
 const getBackendUrl = (): string => {
-  const envUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
+  // Check multiple possible environment variables
+  const envUrl = process.env.NEXT_PUBLIC_API_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     process.env.REACT_APP_API_URL;
 
+  // Default to your Hugging Face backend
   const defaultUrl = 'https://alyan1-my-fastapi-backend.hf.space';
-  const devUrl = 'http://localhost:8000';
+
+  // In development, you might want to use localhost if backend is running
   const isDevelopment = process.env.NODE_ENV === 'development';
+  const devUrl = 'http://localhost:8000'; // Your FastAPI default port
 
   console.log('Environment check:', {
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     envUrl,
-    isDevelopment,
-    resolvedUrl: envUrl || (isDevelopment ? devUrl : defaultUrl),
+    isDevelopment
   });
 
-  return envUrl || (isDevelopment ? devUrl : defaultUrl);
+  return envUrl || defaultUrl;
 };
+
 
 
  const constructImageUrl = (baseUrl: string, imgUrl: string): string => {
@@ -255,8 +262,8 @@ async function handleDownload(url: string, filename?: string): Promise<void> {
     const response = await fetch(url, {
       mode: 'cors',
       headers: {
-        'Origin': window.location.origin
-      }
+        'Origin': window.location.origin,
+      },
     });
 
     if (!response.ok) {
@@ -274,32 +281,13 @@ async function handleDownload(url: string, filename?: string): Promise<void> {
       URL.revokeObjectURL(link.href);
       link.remove();
     }, 100);
-
   } catch (err) {
-    console.error('Primary download method failed:', err);
-
-    try {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename || url.split('/').pop() || 'image.jpg';
-      link.target = '_blank';
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (fallbackErr) {
-      console.error('Fallback download failed:', fallbackErr);
-      const newWindow = window.open(url, '_blank');
-      if (!newWindow) {
-        alert('Download failed due to CORS restrictions. Please right-click the image and select "Save image as..." to download manually.');
-      } else {
-        alert('Download initiated. If the image opens in a new tab, right-click and select "Save image as..." to download.');
-      }
-    }
+    console.error('Download failed:', err);
+    alert('Download failed. Please try again or check CORS settings.');
   }
 }
 
-// ✅ FIXED: Share function with proper types
+// ✅ Share a single image or copy link
 async function handleShare(url: string, filename?: string): Promise<void> {
   if (navigator.share) {
     try {
@@ -316,7 +304,7 @@ async function handleShare(url: string, filename?: string): Promise<void> {
       await navigator.clipboard.writeText(url);
       alert('Link copied to clipboard!');
     } catch (err) {
-      console.error('Clipboard access failed:', err);
+      console.error('Clipboard write failed:', err);
       const textarea = document.createElement('textarea');
       textarea.value = url;
       document.body.appendChild(textarea);
@@ -328,7 +316,7 @@ async function handleShare(url: string, filename?: string): Promise<void> {
   }
 }
 
-// ✅ FIXED: Bulk download function
+// ✅ Bulk download with delay and error handling
 async function handleBulkDownload(images: ImageData[], type: string): Promise<void> {
   if (images.length === 0) {
     alert('No images to download.');
@@ -343,8 +331,10 @@ async function handleBulkDownload(images: ImageData[], type: string): Promise<vo
     const img = images[i];
     const filename = img.filename || `${type}_image_${i + 1}.jpg`;
 
+    const fixedUrl = getFixedUrl(img.url); // 👈 Use fixed URL here
+
     try {
-      await handleDownload(img.url, filename);
+      await handleDownload(fixedUrl, filename);
       downloadedCount++;
 
       if (i === images.length - 1) {
@@ -362,29 +352,35 @@ async function handleBulkDownload(images: ImageData[], type: string): Promise<vo
   alert(`Bulk download initiated for ${totalImages} images. Check your downloads folder.`);
 }
 
-// ✅ FIXED: Bulk share function
+
+// ✅ Bulk share or clipboard copy
 async function handleBulkShare(images: ImageData[], type: string): Promise<void> {
   const galleryText = `Check out this AI-classified ${type} gallery with ${images.length} images!`;
-  const firstImageUrl = images[0]?.url;
 
-  if (navigator.share && firstImageUrl) {
+  // ✅ Replace localhost with backend in first image URL
+  const firstUrl = getFixedUrl(images[0]?.url || '');
+
+  if (navigator.share && firstUrl) {
     try {
       await navigator.share({
         title: `${type.charAt(0).toUpperCase() + type.slice(1)} Gallery`,
         text: galleryText,
-        url: firstImageUrl,
+        url: firstUrl,
       });
     } catch (err) {
-      console.log('Share cancelled or failed:', err);
+      console.log('Bulk share failed or cancelled:', err);
     }
   } else {
-    const galleryInfo = `${galleryText}\n\nImages:\n${images.map((img, i) => `${i + 1}. ${img.url}`).join('\n')}`;
+    // ✅ Replace all localhost URLs with backend in bulk copy text
+    const links = images.map((img, i) => `${i + 1}. ${getFixedUrl(img.url)}`).join('\n');
+    const fullText = `${galleryText}\n\n${links}`;
+
     try {
-      await navigator.clipboard.writeText(galleryInfo);
-      alert('Gallery information copied to clipboard!');
+      await navigator.clipboard.writeText(fullText);
+      alert('Gallery links copied to clipboard!');
     } catch (err) {
-      console.error('Clipboard access failed:', err);
-      alert('Unable to share gallery. Please try individual image sharing.');
+      console.error('Clipboard write failed:', err);
+      alert('Clipboard copy failed. Try sharing images one by one.');
     }
   }
 }
